@@ -1,15 +1,15 @@
-import { redirect } from "next/navigation"
-import { createClient } from "@/lib/supabase/server"
-import { AuthForm } from "@/components/auth/auth-form"
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { AuthForm } from "@/components/auth/auth-form";
 
 export default async function Home() {
-  const supabase = createClient()
+  const supabase = createClient();
   const {
     data: { session },
-  } = await supabase.auth.getSession()
+  } = await supabase.auth.getSession();
 
   if (session) {
-    redirect("/dashboard")
+    redirect("/dashboard");
   }
 
   return (
@@ -18,5 +18,5 @@ export default async function Home() {
         <AuthForm />
       </div>
     </div>
-  )
+  );
 }
