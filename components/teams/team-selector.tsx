@@ -59,6 +59,31 @@ export function TeamSelector({
   const supabase = createClient();
 
   useEffect(() => {
+    if (!currentUserId) return;
+
+    const channel = supabase
+      .channel("team-members")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "team_members",
+          filter: `user_id=eq.${currentUserId}`,
+        },
+        (payload) => {
+          // payload — имеет тип any, можно типизировать при желании
+          fetchTeams();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUserId]);
+
+  useEffect(() => {
     getCurrentUser();
     checkAndCreateTables();
   }, []);
@@ -219,28 +244,44 @@ export function TeamSelector({
     }
   };
 
-  const inviteToTeam = async () => {
-    if (!inviteEmail.trim() || !selectedTeamId) return;
+  const sendInvitation = async () => {
+    if (!inviteEmail || !selectedTeamId) return;
 
-    setIsLoading(true);
-    try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user?.email) {
       toast({
-        title: "📧 Приглашение отправлено!",
-        description: `Приглашение отправлено на ${inviteEmail}`,
+        title: "Ошибка",
+        description: "Не удалось определить приглашающего пользователя",
+        variant: "destructive",
       });
+      return;
+    }
 
-      setInviteEmail("");
-      setIsInviteDialogOpen(false);
-    } catch (error) {
-      console.error("Ошибка при отправке приглашения:", error);
+    const { data, error } = await supabase.from("team_invitations").insert({
+      email: inviteEmail,
+      team_id: selectedTeamId,
+      invited_by: user.email, // <-- добавляем email того, кто приглашает
+    });
+
+    if (error) {
       toast({
         title: "Ошибка",
         description: "Не удалось отправить приглашение",
         variant: "destructive",
       });
-    } finally {
-      setIsLoading(false);
+      return;
     }
+
+    toast({
+      title: "Приглашение отправлено",
+      description: `Пользователь с email ${inviteEmail} получит приглашение`,
+    });
+
+    setInviteEmail("");
+    setIsInviteDialogOpen(false);
   };
 
   const selectedTeam = teams.find((team) => team.id === selectedTeamId);
@@ -338,42 +379,30 @@ export function TeamSelector({
       {selectedTeamId && isOwner && (
         <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
           <DialogTrigger asChild>
-            <Button
-              variant="outline"
-              className="border-purple-200 hover:bg-purple-50 dark:border-purple-800 dark:hover:bg-purple-900/20 rounded-xl button-glow"
-            >
-              <Mail className="w-4 h-4 mr-2" />
-              Пригласить
+            <Button variant="outline">
+              <Mail className="mr-2 h-4 w-4" /> Пригласить в команду
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-md stat-card border-0 shadow-2xl rounded-2xl">
+          <DialogContent>
             <DialogHeader>
-              <DialogTitle className="text-xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
-                📧 Пригласить в команду
-              </DialogTitle>
+              <DialogTitle>Пригласить участника</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="invite-email" className="text-sm font-medium">
-                  Email участника
-                </Label>
-                <Input
-                  id="invite-email"
-                  type="email"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  placeholder="example@mail.ru"
-                  className="transition-all duration-150 rounded-lg"
-                />
-              </div>
-              <Button
-                onClick={inviteToTeam}
-                className="w-full team-button text-white border-0 rounded-lg py-3"
-                disabled={isLoading}
-              >
-                {isLoading ? "Отправка..." : "Отправить приглашение"}
-              </Button>
+            <div className="grid gap-4 py-4">
+              <Label>Email</Label>
+              <Input
+                type="email"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                placeholder="user@example.com"
+              />
             </div>
+            <Button
+              className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary hover:bg-primary/90 h-10 w-full md:w-auto bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white border-0 rounded-xl py-3 px-6 shadow-lg button-glow transition-all duration-300 hover:shadow-xl "
+              onClick={sendInvitation}
+              disabled={!inviteEmail}
+            >
+              Отправить приглашение
+            </Button>
           </DialogContent>
         </Dialog>
       )}

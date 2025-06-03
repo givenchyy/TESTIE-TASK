@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { PendingInvitesBanner } from "@/components/ui/PendingInvitesBanner";
 import {
   Select,
   SelectContent,
@@ -54,10 +55,19 @@ interface Task {
   user_id: string;
 }
 
+interface Invite {
+  id: string;
+  team_id: string;
+  team_name: string;
+  invited_by: string;
+  status: "pending" | "accepted" | "rejected";
+}
+
 export default function Dashboard() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [filteredTasks, setFilteredTasks] = useState<Task[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
+  const [pendingInvites, setPendingInvites] = useState<Invite[]>([]);
   const [newTask, setNewTask] = useState({
     title: "",
     description: "",
@@ -107,6 +117,38 @@ export default function Dashboard() {
     }
   };
 
+  const fetchPendingInvites = async () => {
+    const { data, error } = await supabase
+      .from("team_invitations")
+      .select(
+        `
+    id,
+    team_id,
+    invited_by,
+    status,
+    teams!fk_team (
+      name
+    )
+  `
+      )
+      .eq("status", "pending");
+
+    if (error) {
+      console.error("Ошибка загрузки приглашений", error);
+    } else {
+      const invitesWithTeamName = data.map((invite) => ({
+        ...invite,
+        team_name: invite.teams?.[0]?.name,
+      }));
+      setPendingInvites(invitesWithTeamName);
+    }
+  };
+  useEffect(() => {
+    if (tablesExist) {
+      fetchTasks();
+      fetchPendingInvites(); // <- вызов функции загрузки приглашений
+    }
+  }, [selectedTeamId, tablesExist]);
   const createDemoTasks = () => {
     const demoTasks: Task[] = [
       {
@@ -440,6 +482,13 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
+      <div>
+        {/* Вот здесь показываем баннер приглашений */}
+        <PendingInvitesBanner />
+
+        {/* Дальше весь остальной UI */}
+        {/* ... */}
+      </div>
       {/* Hero Section */}
       <div className="text-center py-6">
         <div className="inline-flex items-center space-x-3 mb-4">
