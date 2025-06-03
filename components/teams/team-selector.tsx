@@ -255,7 +255,6 @@ export function TeamSelector({
         }
       >
         <SelectTrigger className="w-48 border-0 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm rounded-xl shadow-lg">
-          <Users className="w-4 h-4 mr-2" />
           <SelectValue />
         </SelectTrigger>
         <SelectContent className="rounded-xl border-0 shadow-2xl">
